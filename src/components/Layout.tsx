@@ -1,4 +1,4 @@
-import { Menu, Search, Tv, Radio, Trophy, Newspaper, Bell, UserCircle2 } from 'lucide-react'
+import { Menu, Search, Tv, Radio, Trophy, Newspaper, UserCircle2 } from 'lucide-react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { navItems } from '../data/demoData'
 
@@ -46,12 +46,11 @@ export function Layout() {
         </div>
 
         <div className="mx-auto flex max-w-7xl items-center gap-2 overflow-x-auto border-t border-slate-800 px-4 py-3 text-sm text-slate-300 lg:hidden">
-          <div className="flex items-center gap-2 rounded-full bg-slate-900 px-3 py-2"><Tv size={14} /> TV</div>
-          <div className="flex items-center gap-2 rounded-full bg-slate-900 px-3 py-2"><Radio size={14} /> Radio</div>
-          <div className="flex items-center gap-2 rounded-full bg-slate-900 px-3 py-2"><Trophy size={14} /> Sports</div>
-          <div className="flex items-center gap-2 rounded-full bg-slate-900 px-3 py-2"><Newspaper size={14} /> News</div>
-          <div className="flex items-center gap-2 rounded-full bg-slate-900 px-3 py-2"><Bell size={14} /> Alerts</div>
-          <div className="flex items-center gap-2 rounded-full bg-slate-900 px-3 py-2"><UserCircle2 size={14} /> Profile</div>
+          <NavLink to="/tv" className="flex items-center gap-2 rounded-full bg-slate-900 px-3 py-2"><Tv size={14} /> TV</NavLink>
+          <NavLink to="/radio" className="flex items-center gap-2 rounded-full bg-slate-900 px-3 py-2"><Radio size={14} /> Radio</NavLink>
+          <NavLink to="/sports" className="flex items-center gap-2 rounded-full bg-slate-900 px-3 py-2"><Trophy size={14} /> Sports</NavLink>
+          <NavLink to="/news" className="flex items-center gap-2 rounded-full bg-slate-900 px-3 py-2"><Newspaper size={14} /> News</NavLink>
+          <NavLink to="/profile" className="flex items-center gap-2 rounded-full bg-slate-900 px-3 py-2"><UserCircle2 size={14} /> Profile</NavLink>
         </div>
       </header>
 
@@ -83,7 +82,7 @@ export function Layout() {
           </div>
           <div>
             <p className="mb-3 text-sm font-semibold uppercase tracking-[0.2em] text-slate-300">Status</p>
-            <p className="text-sm text-slate-400">Demo data is clearly labeled and provider approvals are required before production use.</p>
+            <p className="text-sm text-slate-400">Live sports scores by ESPN. TV and radio streams are provided by their official broadcasters.</p>
           </div>
         </div>
       </footer>
