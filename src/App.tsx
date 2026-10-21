@@ -309,6 +309,7 @@ function TvPage() {
 
 function RadioPage() {
   const [activeStation, setActiveStation] = useState(featuredStations[0])
+  const [streamError, setStreamError] = useState(false)
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('All')
   const categories = ['All', ...new Set(featuredStations.map((station) => station.category))]
@@ -326,11 +327,22 @@ function RadioPage() {
             <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Now playing</p>
             <p className="mt-1 text-lg font-semibold text-white">{activeStation.name}</p>
           </div>
-          <a href={activeStation.officialUrl} target="_blank" rel="noreferrer" className="text-sm text-sky-300 hover:text-sky-200">Station website</a>
+          <a href={activeStation.listenUrl || activeStation.officialUrl} target="_blank" rel="noreferrer" className="text-sm text-sky-300 hover:text-sky-200">Yumvire online</a>
         </div>
-        <audio key={activeStation.id} controls autoPlay className="mt-4 w-full" src={activeStation.streamUrl}>
-          Your browser does not support audio playback.
-        </audio>
+        {activeStation.streamUrl ? (
+          <audio key={activeStation.id} controls autoPlay className="mt-4 w-full" src={activeStation.streamUrl} onError={() => setStreamError(true)}>
+            Your browser does not support audio playback.
+          </audio>
+        ) : (
+          <p className="mt-4 text-sm text-slate-300">
+            Nta murongo wa live audio direct watangajwe. <a href={activeStation.listenUrl || activeStation.officialUrl} target="_blank" rel="noreferrer" className="text-sky-300 hover:text-sky-200">Yumvire online</a>.
+          </p>
+        )}
+        {activeStation.streamUrl && streamError && (
+          <p className="mt-3 text-sm text-amber-300">
+            Stream ntiyafunguye. <a href={activeStation.listenUrl || activeStation.officialUrl} target="_blank" rel="noreferrer" className="underline">Yumvire online</a>.
+          </p>
+        )}
       </section>
       <div className="flex flex-col gap-3 sm:flex-row">
         <input value={query} onChange={(event) => setQuery(event.target.value)} className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white placeholder:text-slate-500" placeholder="Search stations" aria-label="Search stations" />
@@ -343,14 +355,14 @@ function RadioPage() {
           <div key={station.id} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
             <div className="flex items-center justify-between">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-500/15 font-bold text-violet-200">{station.name.slice(0, 2).toUpperCase()}</div>
-              <span className="text-xs uppercase tracking-[0.18em] text-sky-300">{station.status}</span>
+              <span className="text-xs uppercase tracking-[0.18em] text-sky-300">{station.status === 'Website' ? 'Listen online' : station.status}</span>
             </div>
             <h3 className="mt-4 text-xl font-semibold text-white">{station.name}</h3>
             <p className="mt-2 text-sm text-slate-400">{station.country} · {station.language}</p>
             <p className="mt-3 text-sm text-slate-300">{station.description}</p>
             <div className="mt-5 flex items-center justify-between text-sm">
               <span className="rounded-full border border-slate-700 px-2 py-1 text-slate-300">{station.category}</span>
-              <button type="button" onClick={() => setActiveStation(station)} className="rounded-full bg-sky-500 px-3 py-2 font-medium text-white hover:bg-sky-400">Listen</button>
+              <button type="button" onClick={() => { setActiveStation(station); setStreamError(false) }} className="rounded-full bg-sky-500 px-3 py-2 font-medium text-white hover:bg-sky-400">{station.streamUrl ? 'Listen' : 'Open online'}</button>
             </div>
           </div>
         ))}
