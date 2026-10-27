@@ -107,8 +107,7 @@ const verifiedStations: Station[] = [
     language: 'Kinyarwanda',
     category: 'Umuziki',
     description: 'Imiziki n’ibiganiro bya Magic FM ya RBA.',
-    status: 'Verified',
-    streamUrl: 'http://listen.rba.co.rw:8080/',
+    status: 'Website',
     officialUrl: 'https://www.rba.co.rw/radio/7/Magic-Fm',
   },
   {
@@ -118,8 +117,7 @@ const verifiedStations: Station[] = [
     language: 'Kinyarwanda',
     category: 'Iyobokamana',
     description: 'Radiyo Gatolika itangaza amasengesho n’ibiganiro.',
-    status: 'Verified',
-    streamUrl: 'http://dreamsiteradiocp.com:8044/stream',
+    status: 'Website',
     officialUrl: 'http://www.radiomaria.rw/',
   },
   {

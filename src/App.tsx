@@ -330,7 +330,7 @@ function RadioPage() {
           <a href={activeStation.listenUrl || activeStation.officialUrl} target="_blank" rel="noreferrer" className="text-sm text-sky-300 hover:text-sky-200">Yumvire online</a>
         </div>
         {activeStation.streamUrl ? (
-          <audio key={activeStation.id} controls autoPlay className="mt-4 w-full" src={activeStation.streamUrl} onError={() => setStreamError(true)}>
+          <audio key={activeStation.id} controls className="mt-4 w-full" src={activeStation.streamUrl} onError={() => setStreamError(true)}>
             Your browser does not support audio playback.
           </audio>
         ) : (
@@ -362,7 +362,11 @@ function RadioPage() {
             <p className="mt-3 text-sm text-slate-300">{station.description}</p>
             <div className="mt-5 flex items-center justify-between text-sm">
               <span className="rounded-full border border-slate-700 px-2 py-1 text-slate-300">{station.category}</span>
-              <button type="button" onClick={() => { setActiveStation(station); setStreamError(false) }} className="rounded-full bg-sky-500 px-3 py-2 font-medium text-white hover:bg-sky-400">{station.streamUrl ? 'Listen' : 'Open online'}</button>
+              {station.streamUrl ? (
+                <button type="button" onClick={() => { setActiveStation(station); setStreamError(false) }} className="rounded-full bg-sky-500 px-3 py-2 font-medium text-white hover:bg-sky-400">Listen</button>
+              ) : (
+                <a href={station.listenUrl || station.officialUrl} target="_blank" rel="noreferrer" className="rounded-full bg-sky-500 px-3 py-2 font-medium text-white hover:bg-sky-400">Open online</a>
+              )}
             </div>
           </div>
         ))}
