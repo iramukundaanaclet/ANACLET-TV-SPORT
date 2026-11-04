@@ -11,6 +11,7 @@ export type TvChannel = {
   languages: string[]
   categories: string[]
   logo: string
+  website: string
   streamUrls: string[]
   quality: string
 }
@@ -25,6 +26,7 @@ type ApiChannel = {
   categories?: string[]
   is_nsfw?: boolean
   closed?: string | null
+  website?: string | null
 }
 
 type ApiStream = {
@@ -57,6 +59,16 @@ function safeStreamUrl(value: string) {
   try {
     const url = new URL(value)
     return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : ''
+  } catch {
+    return ''
+  }
+}
+
+function safeWebsiteUrl(value: string | null | undefined) {
+  if (!value) return ''
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.href : ''
   } catch {
     return ''
   }
@@ -110,6 +122,7 @@ export async function fetchTvDirectory(signal?: AbortSignal): Promise<TvDirector
       languages: channel.languages ?? [],
       categories: channel.categories ?? [],
       logo: preferredLogos.get(channel.id) ?? '',
+      website: safeWebsiteUrl(channel.website),
       streamUrls: channelStreams.map((item) => item.url),
       quality: stream.quality ?? stream.labels?.[0] ?? 'HLS live stream',
     })

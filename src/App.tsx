@@ -260,6 +260,7 @@ function TvPage() {
   const [playerError, setPlayerError] = useState('')
   const [playerRetry, setPlayerRetry] = useState(0)
   const [streamIndex, setStreamIndex] = useState(0)
+  const [playerMode, setPlayerMode] = useState<'stream' | 'broadcaster'>('stream')
   const [refreshToken, setRefreshToken] = useState(0)
   const videoPlayer = useRef<HTMLVideoElement>(null)
   const countryChannels = channelsByCountry[selectedCountry] ?? []
@@ -292,7 +293,7 @@ function TvPage() {
 
   useEffect(() => {
     const player = videoPlayer.current
-    if (!player || !selectedChannel) return
+    if (!player || !selectedChannel || playerMode !== 'stream') return
 
     let hls: import('hls.js').default | null = null
     let cancelled = false
@@ -350,11 +351,12 @@ function TvPage() {
       player.removeAttribute('src')
       player.load()
     }
-  }, [selectedChannel, playerRetry, streamIndex])
+  }, [selectedChannel, playerRetry, streamIndex, playerMode])
 
   const chooseChannel = (channel: TvChannel) => {
     setPlayerError('')
     setStreamIndex(0)
+    setPlayerMode('stream')
     setSelectedChannel(channel)
   }
 
@@ -367,12 +369,18 @@ function TvPage() {
     setPlayerError('')
   }
 
+  const showBroadcasterEmbed = () => {
+    if (!selectedChannel?.website) return
+    setPlayerError('')
+    setPlayerMode('broadcaster')
+  }
+
   return (
     <div className="space-y-6">
       <SectionHeader eyebrow="Global TV directory" title="Watch TV around the world" />
       <section className="overflow-hidden rounded-2xl border border-slate-800 bg-black">
         <div className="aspect-video w-full">
-          {selectedChannel ? (
+          {selectedChannel && playerMode === 'stream' ? (
             <video
               ref={videoPlayer}
               key={selectedChannel.id}
@@ -385,6 +393,16 @@ function TvPage() {
               aria-label={`${selectedChannel.name} live TV`}
               onError={() => setPlayerError('This channel stream is unavailable right now. Try another channel.')}
             />
+          ) : selectedChannel?.website ? (
+            <iframe
+              key={`${selectedChannel.id}-broadcaster`}
+              src={selectedChannel.website}
+              title={`${selectedChannel.name} official broadcaster player`}
+              className="h-full w-full border-0 bg-black"
+              allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+              allowFullScreen
+              referrerPolicy="strict-origin-when-cross-origin"
+            />
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
               <p className="text-sm text-slate-400">{loading ? 'Loading live TV channels…' : 'Choose a channel below to watch.'}</p>
@@ -396,7 +414,13 @@ function TvPage() {
             <p className="font-semibold text-white">{selectedChannel?.name ?? 'ANACLET PAGE TV'}</p>
             <p className="text-sm text-slate-400">{selectedChannel ? `${selectedChannel.countryName} · ${selectedChannel.languages.join(', ') || 'Language not listed'}` : 'Live channels from around the world'}</p>
           </div>
-          {selectedChannel && <span className="text-xs font-medium uppercase tracking-[0.16em] text-emerald-300">In-page player</span>}
+          {selectedChannel && (
+            <div className="flex flex-wrap items-center gap-2">
+              {playerMode === 'stream' && selectedChannel.website && <button type="button" onClick={showBroadcasterEmbed} className="rounded-lg border border-slate-700 px-3 py-2 text-xs font-medium text-slate-200 hover:bg-slate-800">Try broadcaster embed</button>}
+              {playerMode === 'broadcaster' && <button type="button" onClick={() => { setPlayerError(''); setStreamIndex(0); setPlayerMode('stream') }} className="rounded-lg border border-slate-700 px-3 py-2 text-xs font-medium text-slate-200 hover:bg-slate-800">Use direct stream</button>}
+              <span className="text-xs font-medium uppercase tracking-[0.16em] text-emerald-300">{playerMode === 'stream' ? 'In-page stream' : 'Official embed'}</span>
+            </div>
+          )}
         </div>
       </section>
       <div className="flex flex-col gap-3 sm:flex-row">
@@ -409,7 +433,7 @@ function TvPage() {
         </select>
       </div>
       {error && <p role="alert" className="text-sm text-amber-300">{error} <button type="button" onClick={() => setRefreshToken((token) => token + 1)} className="underline">Retry</button></p>}
-      {playerError && <p role="status" className="flex flex-wrap items-center gap-2 text-sm text-amber-300">{playerError}<button type="button" onClick={retryStream} className="underline">Retry{selectedChannel && selectedChannel.streamUrls.length > 1 ? ` source ${((streamIndex + 1) % selectedChannel.streamUrls.length) + 1}/${selectedChannel.streamUrls.length}` : ''}</button></p>}
+      {playerError && <p role="status" className="flex flex-wrap items-center gap-2 text-sm text-amber-300">{playerError}<button type="button" onClick={retryStream} className="underline">Retry{selectedChannel && selectedChannel.streamUrls.length > 1 ? ` source ${((streamIndex + 1) % selectedChannel.streamUrls.length) + 1}/${selectedChannel.streamUrls.length}` : ''}</button>{selectedChannel?.website && <button type="button" onClick={showBroadcasterEmbed} className="underline">Try broadcaster embed</button>}</p>}
       {!loading && !error && countryChannels.length === 0 && <p className="text-sm text-slate-400">No playable public channels are listed for this country yet.</p>}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {channels.map((channel) => (
