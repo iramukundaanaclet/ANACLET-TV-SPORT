@@ -259,6 +259,7 @@ function TvPage() {
   const [error, setError] = useState('')
   const [playerError, setPlayerError] = useState('')
   const [playerRetry, setPlayerRetry] = useState(0)
+  const [streamIndex, setStreamIndex] = useState(0)
   const [refreshToken, setRefreshToken] = useState(0)
   const videoPlayer = useRef<HTMLVideoElement>(null)
   const countryChannels = channelsByCountry[selectedCountry] ?? []
@@ -298,14 +299,20 @@ function TvPage() {
     setPlayerError('')
     player.muted = true
 
+    const streamUrl = selectedChannel.streamUrls[streamIndex]
     const startStream = async () => {
-      if (/\.m3u8(?:$|[?#])/i.test(selectedChannel.streamUrl)) {
+      if (!streamUrl) {
+        setPlayerError('No stream source is available for this channel.')
+        return
+      }
+
+      if (/\.m3u8(?:$|[?#])/i.test(streamUrl)) {
         const Hls = (await import('hls.js')).default
         if (cancelled) return
 
         if (Hls.isSupported()) {
           hls = new Hls()
-          hls.loadSource(selectedChannel.streamUrl)
+          hls.loadSource(streamUrl)
           hls.attachMedia(player)
           hls.on(Hls.Events.MANIFEST_PARSED, () => {
             void player.play().catch(() => setPlayerError('Press play in the video controls to start this channel.'))
@@ -321,7 +328,7 @@ function TvPage() {
         }
 
         if (player.canPlayType('application/vnd.apple.mpegurl')) {
-          player.src = selectedChannel.streamUrl
+          player.src = streamUrl
           void player.play().catch(() => setPlayerError('Press play in the video controls to start this channel.'))
           return
         }
@@ -330,7 +337,7 @@ function TvPage() {
         return
       }
 
-      player.src = selectedChannel.streamUrl
+      player.src = streamUrl
       void player.play().catch(() => setPlayerError('Press play in the video controls to start this channel.'))
     }
 
@@ -343,11 +350,21 @@ function TvPage() {
       player.removeAttribute('src')
       player.load()
     }
-  }, [selectedChannel, playerRetry])
+  }, [selectedChannel, playerRetry, streamIndex])
 
   const chooseChannel = (channel: TvChannel) => {
     setPlayerError('')
+    setStreamIndex(0)
     setSelectedChannel(channel)
+  }
+
+  const retryStream = () => {
+    if (selectedChannel && selectedChannel.streamUrls.length > 1) {
+      setStreamIndex((index) => (index + 1) % selectedChannel.streamUrls.length)
+    } else {
+      setPlayerRetry((retry) => retry + 1)
+    }
+    setPlayerError('')
   }
 
   return (
@@ -392,7 +409,7 @@ function TvPage() {
         </select>
       </div>
       {error && <p role="alert" className="text-sm text-amber-300">{error} <button type="button" onClick={() => setRefreshToken((token) => token + 1)} className="underline">Retry</button></p>}
-      {playerError && <p role="status" className="flex flex-wrap items-center gap-2 text-sm text-amber-300">{playerError}<button type="button" onClick={() => setPlayerRetry((retry) => retry + 1)} className="underline">Retry</button></p>}
+      {playerError && <p role="status" className="flex flex-wrap items-center gap-2 text-sm text-amber-300">{playerError}<button type="button" onClick={retryStream} className="underline">Retry{selectedChannel && selectedChannel.streamUrls.length > 1 ? ` source ${((streamIndex + 1) % selectedChannel.streamUrls.length) + 1}/${selectedChannel.streamUrls.length}` : ''}</button></p>}
       {!loading && !error && countryChannels.length === 0 && <p className="text-sm text-slate-400">No playable public channels are listed for this country yet.</p>}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {channels.map((channel) => (
@@ -412,7 +429,7 @@ function TvPage() {
             <p className="mt-2 text-sm text-slate-400">{channel.countryName} · {channel.languages.join(', ') || 'Language not listed'}</p>
             <p className="mt-3 text-sm text-slate-300">{channel.categories.join(' · ') || 'Television'}</p>
             <div className="mt-5 flex items-center justify-between text-sm">
-              <span className="min-w-0 truncate text-xs text-slate-500">{channel.quality || 'Live stream'}</span>
+              <span className="min-w-0 truncate text-xs text-slate-500">{channel.quality || 'Live stream'}{channel.streamUrls.length > 1 ? ` · ${channel.streamUrls.length} sources` : ''}</span>
               <button type="button" onClick={() => chooseChannel(channel)} className="shrink-0 rounded-full bg-sky-500 px-3 py-2 font-medium text-white hover:bg-sky-400">{selectedChannel?.id === channel.id ? 'Selected' : 'Watch'}</button>
             </div>
           </article>

@@ -11,7 +11,7 @@ export type TvChannel = {
   languages: string[]
   categories: string[]
   logo: string
-  streamUrl: string
+  streamUrls: string[]
   quality: string
 }
 
@@ -81,22 +81,24 @@ export async function fetchTvDirectory(signal?: AbortSignal): Promise<TvDirector
       .filter((channel) => !channel.is_nsfw && !channel.closed && countryNames.has(channel.country))
       .map((channel) => [channel.id, channel]),
   )
-  const preferredStreams = new Map<string, { stream: ApiStream; url: string }>()
+  const streamsByChannel = new Map<string, Array<{ stream: ApiStream; url: string }>>()
 
   for (const stream of apiStreams) {
     if (!channelsById.has(stream.channel)) continue
     const url = safeStreamUrl(stream.url)
     if (!url || !url.toLowerCase().includes('.m3u8')) continue
+    if (window.location.protocol === 'https:' && new URL(url).protocol !== 'https:') continue
 
-    const current = preferredStreams.get(stream.channel)
-    if (!current || (new URL(url).protocol === 'https:' && new URL(current.url).protocol !== 'https:')) {
-      preferredStreams.set(stream.channel, { stream, url })
-    }
+    const channelStreams = streamsByChannel.get(stream.channel) ?? []
+    if (!channelStreams.some((item) => item.url === url)) channelStreams.push({ stream, url })
+    streamsByChannel.set(stream.channel, channelStreams)
   }
 
   const channelsByCountry: Record<string, TvChannel[]> = {}
 
-  for (const { stream, url: streamUrl } of preferredStreams.values()) {
+  for (const channelStreams of streamsByChannel.values()) {
+    channelStreams.sort((first, second) => Number(new URL(second.url).protocol === 'https:') - Number(new URL(first.url).protocol === 'https:'))
+    const { stream } = channelStreams[0]
     const channel = channelsById.get(stream.channel)
     if (!channel) continue
     const countryChannels = channelsByCountry[channel.country] ??= []
@@ -108,7 +110,7 @@ export async function fetchTvDirectory(signal?: AbortSignal): Promise<TvDirector
       languages: channel.languages ?? [],
       categories: channel.categories ?? [],
       logo: preferredLogos.get(channel.id) ?? '',
-      streamUrl,
+      streamUrls: channelStreams.map((item) => item.url),
       quality: stream.quality ?? stream.labels?.[0] ?? 'HLS live stream',
     })
   }
