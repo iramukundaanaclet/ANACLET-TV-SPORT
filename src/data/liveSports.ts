@@ -14,6 +14,8 @@ export type ScoreboardMatch = {
   state: string
   date: string
   minute: string
+  broadcasters: string[]
+  eventUrl: string
 }
 
 export type SportsNewsItem = {
@@ -32,6 +34,7 @@ type ESPNScoreboard = {
     name: string
     date: string
     competitions?: Array<{
+      broadcasts?: Array<{ names?: string[] }>
       status?: {
         displayClock?: string
         type?: { state?: string; detail?: string; description?: string }
@@ -42,6 +45,7 @@ type ESPNScoreboard = {
         team: { displayName: string }
       }>
     }>
+    links?: Array<{ rel?: string[]; href?: string }>
   }>
 }
 
@@ -99,8 +103,25 @@ export async function fetchScoreboard(league: string, signal?: AbortSignal) {
       state: status?.type?.state ?? 'pre',
       date: event.date,
       minute: status?.displayClock ?? '',
+      broadcasters: [...new Set(competition?.broadcasts?.flatMap((broadcast) => broadcast.names ?? []) ?? [])],
+      eventUrl: event.links?.find((link) => link.rel?.includes('event'))?.href ?? '',
     }]
   })
+}
+
+export async function fetchAllScoreboards(signal?: AbortSignal) {
+  const results = await Promise.allSettled(
+    scoreboardLeagues.map((league) => fetchScoreboard(league.id, signal)),
+  )
+  const successfulFeeds = results.filter((result) => result.status === 'fulfilled')
+
+  if (successfulFeeds.length === 0) {
+    throw new Error('All score feeds are unavailable')
+  }
+
+  return successfulFeeds
+    .flatMap((result) => result.value)
+    .sort((first, second) => Date.parse(first.date) - Date.parse(second.date))
 }
 
 export async function fetchSportsNews(league: string, signal?: AbortSignal) {

@@ -6,7 +6,7 @@ import { SectionHeader } from './components/SectionHeader'
 import { competitionCards, featuredChannels, featuredStations } from './data/demoData'
 import { fetchRadioCountries, fetchRadioStations, type RadioCountry, type RadioStation } from './data/radioDirectory'
 import { fetchTvDirectory, type TvChannel, type TvCountry } from './data/tvDirectory'
-import { fetchScoreboard, fetchSportsNews, scoreboardLeagues, type ScoreboardMatch, type SportsNewsItem } from './data/liveSports'
+import { fetchAllScoreboards, fetchScoreboard, fetchSportsNews, scoreboardLeagues, type ScoreboardMatch, type SportsNewsItem } from './data/liveSports'
 
 function App() {
   return (
@@ -63,6 +63,40 @@ function useScoreboard(league: string) {
       window.clearInterval(timer)
     }
   }, [league, refreshToken])
+
+  return { matches, loading, error, lastUpdated, refresh: () => setRefreshToken((token) => token + 1) }
+}
+
+function useAllScoreboards() {
+  const [matches, setMatches] = useState<ScoreboardMatch[]>([])
+  const [error, setError] = useState('')
+  const [refreshToken, setRefreshToken] = useState(0)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const controller = new AbortController()
+
+    const refresh = async () => {
+      try {
+        setMatches(await fetchAllScoreboards(controller.signal))
+        setError('')
+        setLastUpdated(new Date())
+      } catch {
+        if (!controller.signal.aborted) setError('Live scores are temporarily unavailable.')
+      } finally {
+        if (!controller.signal.aborted) setLoading(false)
+      }
+    }
+
+    void refresh()
+    const timer = window.setInterval(() => void refresh(), 60_000)
+
+    return () => {
+      controller.abort()
+      window.clearInterval(timer)
+    }
+  }, [refreshToken])
 
   return { matches, loading, error, lastUpdated, refresh: () => setRefreshToken((token) => token + 1) }
 }
@@ -320,6 +354,14 @@ function TvPage() {
           })
           hls.on(Hls.Events.ERROR, (_event, data) => {
             if (data.fatal) {
+              const websiteHost = selectedChannel.website ? new URL(selectedChannel.website).hostname : ''
+              const supportsAutomaticEmbed = websiteHost === 'rba.co.rw' || websiteHost.endsWith('.rba.co.rw') || websiteHost === 'tv1.rw' || websiteHost.endsWith('.tv1.rw')
+              if (supportsAutomaticEmbed) {
+                setPlayerError('The direct stream is unsupported. Showing the broadcaster embed instead.')
+                setPlayerMode('broadcaster')
+                return
+              }
+
               setPlayerError(data.type === Hls.ErrorTypes.MEDIA_ERROR
                 ? 'This channel uses a format that this browser cannot play. Try another channel.'
                 : 'This channel stream is unavailable right now. Try another channel.')
@@ -579,36 +621,51 @@ function RadioPage() {
 }
 
 function SportsPage() {
-  const [league, setLeague] = useState(scoreboardLeagues[0].id)
-  const { matches, loading, error, lastUpdated, refresh } = useScoreboard(league)
+  const [matchFilter, setMatchFilter] = useState<'all' | 'live' | 'upcoming' | 'finished'>('all')
+  const { matches, loading, error, lastUpdated, refresh } = useAllScoreboards()
   const live = matches.filter((match) => match.state === 'in')
   const scheduled = matches.filter((match) => match.state === 'pre')
   const finished = matches.filter((match) => match.state === 'post')
+  const visibleMatches = matchFilter === 'live' ? live
+    : matchFilter === 'upcoming' ? scheduled
+      : matchFilter === 'finished' ? finished
+        : matches
+  const filters = [
+    { id: 'all', label: 'All', count: matches.length },
+    { id: 'live', label: 'Live', count: live.length },
+    { id: 'upcoming', label: 'Upcoming', count: scheduled.length },
+    { id: 'finished', label: 'Completed', count: finished.length },
+  ] as const
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <SectionHeader eyebrow="ESPN live data" title="Scores and fixtures" />
         <div className="mb-6 flex items-center gap-3">
-          <select value={league} onChange={(event) => setLeague(event.target.value)} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" aria-label="Choose competition">
-            {scoreboardLeagues.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-          </select>
           <button type="button" onClick={refresh} disabled={loading} className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-white disabled:opacity-50">
             {loading ? 'Updating…' : 'Refresh'}
           </button>
         </div>
       </div>
-      <p className="-mt-5 text-xs text-slate-500">Source: ESPN · updates every minute{lastUpdated ? ` · last checked ${lastUpdated.toLocaleTimeString()}` : ''}</p>
+      <p className="-mt-5 text-xs text-slate-500">Source: ESPN · {scoreboardLeagues.map((item) => item.label).join(', ')} · updates every minute{lastUpdated ? ` · last checked ${lastUpdated.toLocaleTimeString()}` : ''}</p>
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4"><p className="text-sm text-slate-400">Live</p><p className="mt-1 text-2xl font-bold text-white">{live.length}</p></div>
         <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4"><p className="text-sm text-slate-400">Upcoming</p><p className="mt-1 text-2xl font-bold text-white">{scheduled.length}</p></div>
         <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4"><p className="text-sm text-slate-400">Completed</p><p className="mt-1 text-2xl font-bold text-white">{finished.length}</p></div>
       </div>
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Filter matches">
+        {filters.map((filter) => (
+          <button key={filter.id} type="button" aria-pressed={matchFilter === filter.id} onClick={() => setMatchFilter(filter.id)} className={`rounded-lg border px-3 py-2 text-sm ${matchFilter === filter.id ? 'border-sky-400 bg-sky-500/15 text-sky-200' : 'border-slate-700 text-slate-300 hover:bg-slate-800'}`}>
+            {filter.label} <span className="ml-1 tabular-nums">{filter.count}</span>
+          </button>
+        ))}
+        <Link to="/tv" className="ml-auto inline-flex items-center rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800">Browse TV channels</Link>
+      </div>
       {error && <p role="status" className="text-sm text-amber-300">{error} Check your connection and refresh.</p>}
       {loading && matches.length === 0 && <p className="text-sm text-slate-400">Loading live scores…</p>}
-      {!loading && !error && matches.length === 0 && <p className="text-sm text-slate-400">No fixtures are listed for this competition today.</p>}
+      {!loading && !error && visibleMatches.length === 0 && <p className="text-sm text-slate-400">{matches.length === 0 ? 'No fixtures are listed right now.' : `No ${matchFilter === 'finished' ? 'completed' : matchFilter} matches are listed right now.`}</p>}
       <div className="grid gap-4 md:grid-cols-2">
-        {matches.map((match) => (
+        {visibleMatches.map((match) => (
           <article key={match.id} className="rounded-xl border border-slate-800 bg-slate-900/70 p-5">
             <div className="mb-4 flex items-center justify-between gap-3 text-xs uppercase tracking-[0.16em] text-slate-400">
               <span>{match.competition}</span>
@@ -619,6 +676,10 @@ function SportsPage() {
               <div className="flex items-center justify-between gap-4"><span>{match.awayTeam}</span><span className="font-bold tabular-nums">{match.awayScore}</span></div>
             </div>
             <p className="mt-4 text-sm text-sky-300">{match.state === 'pre' ? new Date(match.date).toLocaleString() : match.minute}</p>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-800 pt-3 text-xs">
+              <p className="text-slate-400">{match.broadcasters.length ? `TV: ${match.broadcasters.join(' · ')}` : 'Broadcaster not listed by ESPN'}</p>
+              {match.eventUrl && <a href={match.eventUrl} target="_blank" rel="noreferrer" className="text-sky-300 hover:text-sky-200">Match details</a>}
+            </div>
           </article>
         ))}
       </div>
