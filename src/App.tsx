@@ -4,6 +4,7 @@ import { Link, Navigate, Route, Routes } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { SectionHeader } from './components/SectionHeader'
 import { competitionCards, featuredChannels, featuredStations } from './data/demoData'
+import { fetchRadioCountries, fetchRadioStations, type RadioCountry, type RadioStation } from './data/radioDirectory'
 import { fetchScoreboard, fetchSportsNews, scoreboardLeagues, type ScoreboardMatch, type SportsNewsItem } from './data/liveSports'
 
 function App() {
@@ -308,70 +309,134 @@ function TvPage() {
 }
 
 function RadioPage() {
-  const [activeStation, setActiveStation] = useState(featuredStations[0])
+  const [countries, setCountries] = useState<RadioCountry[]>([])
+  const [selectedCountry, setSelectedCountry] = useState('Rwanda')
+  const [stations, setStations] = useState<RadioStation[]>([])
+  const [activeStation, setActiveStation] = useState<RadioStation | null>(null)
   const [streamError, setStreamError] = useState(false)
   const [query, setQuery] = useState('')
-  const [category, setCategory] = useState('All')
-  const categories = ['All', ...new Set(featuredStations.map((station) => station.category))]
-  const stations = featuredStations.filter((station) =>
-    station.name.toLowerCase().includes(query.toLowerCase()) &&
-    (category === 'All' || station.category === category),
+  const [loadingCountries, setLoadingCountries] = useState(true)
+  const [loadingStations, setLoadingStations] = useState(true)
+  const [countryError, setCountryError] = useState('')
+  const [stationError, setStationError] = useState('')
+  const [refreshToken, setRefreshToken] = useState(0)
+  const visibleStations = stations.filter((station) =>
+    `${station.name} ${station.language} ${station.tags.join(' ')}`.toLowerCase().includes(query.toLowerCase()),
   )
+
+  useEffect(() => {
+    const controller = new AbortController()
+
+    const loadCountries = async () => {
+      try {
+        const results = await fetchRadioCountries(controller.signal)
+        setCountries(results)
+        setSelectedCountry((current) => results.some((country) => country.name === current) ? current : results[0]?.name ?? '')
+        setCountryError('')
+      } catch {
+        if (!controller.signal.aborted) setCountryError('Countries could not be loaded. Check your connection and try again.')
+      } finally {
+        if (!controller.signal.aborted) setLoadingCountries(false)
+      }
+    }
+
+    void loadCountries()
+    return () => controller.abort()
+  }, [refreshToken])
+
+  useEffect(() => {
+    if (!selectedCountry) return
+    const controller = new AbortController()
+
+    const loadStations = async () => {
+      setLoadingStations(true)
+      setStations([])
+      setActiveStation(null)
+      setStreamError(false)
+      setStationError('')
+
+      try {
+        setStations(await fetchRadioStations(selectedCountry, controller.signal))
+      } catch {
+        if (!controller.signal.aborted) setStationError(`Stations for ${selectedCountry} could not be loaded. Please try again.`)
+      } finally {
+        if (!controller.signal.aborted) setLoadingStations(false)
+      }
+    }
+
+    void loadStations()
+    return () => controller.abort()
+  }, [selectedCountry, refreshToken])
 
   return (
     <div className="space-y-6">
-      <SectionHeader eyebrow="Radio directory" title="Live listening" />
+      <SectionHeader eyebrow="Global radio directory" title="Listen around the world" />
       <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Now playing</p>
-            <p className="mt-1 text-lg font-semibold text-white">{activeStation.name}</p>
+            <p className="mt-1 text-lg font-semibold text-white">{activeStation?.name ?? 'Choose a station to listen'}</p>
           </div>
-          <a href={activeStation.listenUrl || activeStation.officialUrl} target="_blank" rel="noreferrer" className="text-sm text-sky-300 hover:text-sky-200">Yumvire online</a>
+          {activeStation?.homepage && (
+            <a href={activeStation.homepage} target="_blank" rel="noreferrer" className="text-sm text-sky-300 hover:text-sky-200">Station website</a>
+          )}
         </div>
-        {activeStation.streamUrl ? (
+        {activeStation?.secureStream && (
           <audio key={activeStation.id} controls className="mt-4 w-full" src={activeStation.streamUrl} onError={() => setStreamError(true)}>
             Your browser does not support audio playback.
           </audio>
-        ) : (
-          <p className="mt-4 text-sm text-slate-300">
-            Nta murongo wa live audio direct watangajwe. <a href={activeStation.listenUrl || activeStation.officialUrl} target="_blank" rel="noreferrer" className="text-sky-300 hover:text-sky-200">Yumvire online</a>.
+        )}
+        {!activeStation && <p className="mt-3 text-sm text-slate-400">Select a station below to start listening.</p>}
+        {activeStation && !activeStation.secureStream && (
+          <p className="mt-3 text-sm text-slate-300">
+            This station uses an HTTP stream. <a href={activeStation.streamUrl} target="_blank" rel="noreferrer" className="text-sky-300 underline">Open stream in a new tab</a>.
           </p>
         )}
-        {activeStation.streamUrl && streamError && (
-          <p className="mt-3 text-sm text-amber-300">
-            Stream ntiyafunguye. <a href={activeStation.listenUrl || activeStation.officialUrl} target="_blank" rel="noreferrer" className="underline">Yumvire online</a>.
+        {activeStation?.secureStream && streamError && (
+          <p role="status" className="mt-3 text-sm text-amber-300">
+            This stream is unavailable right now.{activeStation.homepage && <> <a href={activeStation.homepage} target="_blank" rel="noreferrer" className="underline">Open station website</a>.</>}
           </p>
         )}
       </section>
       <div className="flex flex-col gap-3 sm:flex-row">
-        <input value={query} onChange={(event) => setQuery(event.target.value)} className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white placeholder:text-slate-500" placeholder="Search stations" aria-label="Search stations" />
-        <select value={category} onChange={(event) => setCategory(event.target.value)} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" aria-label="Filter stations by category">
-          {categories.map((item) => <option key={item}>{item}</option>)}
+        <input value={query} onChange={(event) => setQuery(event.target.value)} className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white placeholder:text-slate-500" placeholder="Search stations, language or genre" aria-label="Search stations, language or genre" />
+        <select value={selectedCountry} onChange={(event) => setSelectedCountry(event.target.value)} disabled={loadingCountries || countries.length === 0} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white disabled:opacity-60" aria-label="Choose a radio country">
+          {countries.map((country) => <option key={country.name} value={country.name}>{country.name} ({country.stationcount})</option>)}
         </select>
       </div>
+      {countryError && <p role="alert" className="text-sm text-amber-300">{countryError} <button type="button" onClick={() => setRefreshToken((token) => token + 1)} className="underline">Retry</button></p>}
+      {stationError && <p role="alert" className="text-sm text-amber-300">{stationError} <button type="button" onClick={() => setRefreshToken((token) => token + 1)} className="underline">Retry</button></p>}
+      {loadingCountries && <p role="status" className="text-sm text-slate-400">Loading countries…</p>}
+      {loadingStations && <p role="status" className="text-sm text-slate-400">Loading verified stations in {selectedCountry}…</p>}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {stations.map((station) => (
-          <div key={station.id} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+        {visibleStations.map((station) => (
+          <article key={station.id} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
             <div className="flex items-center justify-between">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-500/15 font-bold text-violet-200">{station.name.slice(0, 2).toUpperCase()}</div>
-              <span className="text-xs uppercase tracking-[0.18em] text-sky-300">{station.status === 'Website' ? 'Listen online' : station.status}</span>
+              {station.favicon ? (
+                <img src={station.favicon} alt="" className="h-12 w-12 rounded-lg bg-slate-800 object-contain" loading="lazy" onError={(event) => { event.currentTarget.hidden = true }} />
+              ) : (
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/15 font-bold text-emerald-200">{station.name.slice(0, 2).toUpperCase()}</div>
+              )}
+              <span className="text-xs uppercase tracking-[0.18em] text-emerald-300">Recently checked</span>
             </div>
             <h3 className="mt-4 text-xl font-semibold text-white">{station.name}</h3>
             <p className="mt-2 text-sm text-slate-400">{station.country} · {station.language}</p>
-            <p className="mt-3 text-sm text-slate-300">{station.description}</p>
+            <p className="mt-3 text-sm text-slate-300">{station.codec || 'Live stream'}{station.bitrate ? ` · ${station.bitrate} kbps` : ''}</p>
             <div className="mt-5 flex items-center justify-between text-sm">
-              <span className="rounded-full border border-slate-700 px-2 py-1 text-slate-300">{station.category}</span>
-              {station.streamUrl ? (
-                <button type="button" onClick={() => { setActiveStation(station); setStreamError(false) }} className="rounded-full bg-sky-500 px-3 py-2 font-medium text-white hover:bg-sky-400">Listen</button>
+              <span className="min-w-0 truncate text-slate-400">{station.tags.length > 0 ? station.tags.slice(0, 2).join(' · ') : 'Radio'}</span>
+              {station.secureStream ? (
+                <button type="button" onClick={() => { setActiveStation(station); setStreamError(false) }} className="shrink-0 rounded-full bg-sky-500 px-3 py-2 font-medium text-white hover:bg-sky-400">Listen</button>
               ) : (
-                <a href={station.listenUrl || station.officialUrl} target="_blank" rel="noreferrer" className="rounded-full bg-sky-500 px-3 py-2 font-medium text-white hover:bg-sky-400">Open online</a>
+                <a href={station.streamUrl} target="_blank" rel="noreferrer" className="shrink-0 rounded-full bg-sky-500 px-3 py-2 font-medium text-white hover:bg-sky-400">Open stream</a>
               )}
             </div>
-          </div>
+          </article>
         ))}
       </div>
-      {stations.length === 0 && <p className="text-sm text-slate-400">No stations match this search.</p>}
+      {!loadingStations && !stationError && visibleStations.length === 0 && (
+        <p className="text-sm text-slate-400">{stations.length === 0 ? `No verified stations are listed for ${selectedCountry} right now.` : 'No stations match your search.'}</p>
+      )}
+      <p className="text-xs text-slate-500">Station directory provided by <a href="https://www.radio-browser.info/" target="_blank" rel="noreferrer" className="underline hover:text-slate-300">Radio Browser</a>. Streams are hosted by their broadcasters.</p>
     </div>
   )
 }
